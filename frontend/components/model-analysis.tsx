@@ -49,7 +49,7 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
 
   const fetchModelDetails = async (id: string) => {
     try {
-      const response = await fetch(`/api/models/${id}`)
+      const response = await fetch(/api/models/${id})
       if (!response.ok) throw new Error("Failed to fetch model details")
       const data = await response.json()
       if (isMounted) {
@@ -76,12 +76,12 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
     }
 
     const statusMessages = [
-      "Initializing analysis...",
-      "Loading model metadata...",
-      "Analyzing model structure...",
-      "Evaluating performance metrics...",
-      "Generating insights...",
-      "Finalizing analysis...",
+      "Initializing benchmark...",
+      "Loading model parameters...",
+      "Setting up test environment...",
+      "Running performance tests...",
+      "Collecting metrics...",
+      "Finalizing benchmark results...",
     ]
 
     let progress = 0
@@ -118,14 +118,15 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
     setLoading(true)
     setError(null)
     setAnalysisProgress(0)
-    setAnalysisStatus("Initializing analysis...")
+    setAnalysisStatus("Initializing benchmark...")
 
     try {
       // Use AbortController to handle timeouts and cancellations
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-      const response = await fetch("/api/analyze/model", {
+      // Call the benchmark API instead of the analysis API
+      const response = await fetch("http://localhost:8000/run-benchmark", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -139,42 +140,62 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
 
       clearTimeout(timeoutId)
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || "Failed to analyze model")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to run benchmark")
       }
+
+      const data = await response.json()
+      const metrics = data.metrics || {} // Extract the metrics dictionary from the response
 
       // Set progress to 100% when complete
       setAnalysisProgress(100)
-      setAnalysisStatus("Analysis complete!")
+      setAnalysisStatus("Benchmark complete!")
 
       // Small delay to show the 100% progress
       setTimeout(() => {
         if (isMounted) {
-          setAnalysisResults(data)
-          onAnalysisComplete(data)
+          // Transform the metrics into the expected format
+          const formattedResults = {
+            modelScore: metrics.overall_score || null,
+            accuracy: metrics.accuracy || null,
+            precision: metrics.precision || null,
+            recall: metrics.recall || null,
+            f1Score: metrics.f1_score || null,
+            rocAuc: metrics.roc_auc || null,
+            efficiency: metrics.efficiency || null,
+            latency: metrics.latency || null,
+            throughput: metrics.throughput || null,
+            overview: metrics.summary || "",
+            strengths: metrics.strengths || [],
+            weaknesses: metrics.weaknesses || [],
+            recommendations: metrics.recommendations || [],
+            isEstimate: metrics.is_estimate || false
+          }
+
+          setAnalysisResults(formattedResults)
+          onAnalysisComplete(formattedResults)
 
           toast({
-            title: "Analysis Complete",
-            description: "Model analysis has been successfully completed.",
+            title: "Benchmark Complete",
+            description: "Model benchmark has been successfully completed.",
           })
         }
       }, 500)
     } catch (error) {
-      console.error("Error analyzing model:", error)
+      console.error("Error benchmarking model:", error)
 
       if (error instanceof DOMException && error.name === "AbortError") {
-        setError("Analysis timed out. The operation took too long to complete.")
+        setError("Benchmark timed out. The operation took too long to complete.")
         toast({
-          title: "Analysis Timeout",
-          description: "The analysis took too long to complete. Try again or use a smaller model.",
+          title: "Benchmark Timeout",
+          description: "The benchmark took too long to complete. Try again or use a smaller model.",
           variant: "destructive",
         })
       } else {
         setError(error instanceof Error ? error.message : "Unknown error occurred")
         toast({
-          title: "Analysis Failed",
+          title: "Benchmark Failed",
           description: error instanceof Error ? error.message : "Unknown error occurred",
           variant: "destructive",
         })
@@ -303,6 +324,11 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
                 modelDetails?.metrics?.rocAuc ? modelDetails.metrics.rocAuc.toFixed(2) : "N/A",
               )}
               {renderMetric(analysisResults.efficiency || modelDetails?.metrics?.efficiency, "Efficiency")}
+              {renderMetric(analysisResults.latency || modelDetails?.metrics?.latency, "Latency (ms)")}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {renderMetric(analysisResults.throughput || modelDetails?.metrics?.throughput, "Throughput (req/s)")}
             </div>
 
             {!analysisResults.accuracy && !analysisResults.precision && !analysisResults.recall && (
@@ -422,12 +448,12 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Analyzing...
+            Running Benchmark...
           </>
         ) : (
           <>
             <BarChart3 className="mr-2 h-4 w-4" />
-            {analysisResults ? "Re-analyze Model" : "Analyze Model"}
+            {analysisResults ? "Re-run Benchmark" : "Run Benchmark"}
           </>
         )}
       </Button>
@@ -451,4 +477,3 @@ export function ModelAnalysis({ modelId, datasetId, results, onAnalysisComplete 
     </div>
   )
 }
-
